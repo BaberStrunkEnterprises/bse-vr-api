@@ -22,7 +22,7 @@ var token = process.env.VR_TOKEN,
 
 var EventEmitter = events.EventEmitter,
     ee = new EventEmitter(),
-    waitTime = 3 * 60 * 1000;
+    waitTime = 0.5 * 60 * 1000;
 
 var responseChannel = '',
     publishChannel = '/' + api + '/' + group + '/';
@@ -230,12 +230,12 @@ function responseApi(req, res, next) {
 
     var options = {};
 
-    for(var index in req.query ) {
+    for(var index in req.body ) {
         if(index === 'siteID') {
-            options[index] = parseInt(req.query[index]);
+            options[index] = parseInt(req.body[index]);
         }
         else {
-            options[index] = req.query[index];
+            options[index] = req.body[index];
         }
     }
 
@@ -244,7 +244,7 @@ function responseApi(req, res, next) {
     var timeout = setTimeout(function() {
         console.log('----Timeout: '+ messageID +'----');
         var error = {
-            status: 500,
+            status: 408,
             message: {
                 error: 'Timeout Detected.  Probable cause: Return data set too large.',
                 successful: false
@@ -277,12 +277,22 @@ function responseApi(req, res, next) {
 }
 
 var server = restify.createServer();
-server.use(restify.queryParser());
+server.use(restify.plugins.queryParser());
+server.use(restify.plugins.bodyParser());
+server.use(restify.plugins.CORS());
+
+server.opts(/.*/, function (req,res,next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", req.header("Access-Control-Request-Method"));
+    res.header("Access-Control-Allow-Headers", req.header("Access-Control-Request-Headers"));
+    res.send(200);
+    return next();
+});
 
 server.get('/', responseHome);
-server.post('/:version/:message', responseApi)
+server.post('/:version/:message', responseApi);
 
-server.listen(3000, 'localhost', function() {
+server.listen(3030, '192.168.200.238', function() {
     console.log('%s listening at %s', server.name, server.url);
 
     client.connect(function () {

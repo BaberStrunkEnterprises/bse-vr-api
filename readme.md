@@ -6,7 +6,7 @@ App is written with node.js to integrate with the faye server but provide an app
 
 All API calls are identical to the VersiRent API documentation and are versioned. 
 
-```http://127.0.0.1:300/v1/site_information```
+```http://127.0.0.1:3000/v1/site_information```
 
 All calls are POST requests as of 0.1.0
 
