@@ -4,13 +4,13 @@ require('winston-daily-rotate-file');
 
 var transport = new (winston.transports.DailyRotateFile)({
     filename: 'logs/.log',
+    level: 'debug',
     datePattern: 'yyyy-MM-dd',
     prepend: true,
     maxDays: 90
 });
 
 const logger = new (winston.Logger)({
-    level: 'debug',
     transports: [
         transport
     ],
