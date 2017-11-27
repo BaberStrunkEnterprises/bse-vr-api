@@ -1,4 +1,21 @@
 require('dotenv').config();
+const winston = require('winston');
+require('winston-daily-rotate-file');
+
+var transport = new (winston.transports.DailyRotateFile)({
+    filename: 'logs/.log',
+    datePattern: 'yyyy-MM-dd',
+    prepend: true,
+    maxDays: 90
+});
+
+const logger = new (winston.Logger)({
+    level: 'debug',
+    transports: [
+        transport
+    ],
+    exitOnError: false
+});
 
 var sha256 = require('js-sha256'),
     utf8 = require('utf8'),
@@ -46,6 +63,7 @@ var client = new Faye.Client(process.env.VR_URL);
 
 process.on('uncaughtException', function(error) {
     console.log(error);
+    logger.error(error.toString());
 });
 
 function convertToBase64(string) {
@@ -92,14 +110,18 @@ function publishToApi(message, options, api_key) {
         channel = publishChannel + stid,
         messageID = json[version].messageID;
     console.log('----Publishing \''+ messageID + '\' to: ' + channel + '----');
+    logger.info('----Publishing \''+ messageID + '\' to: ' + channel + '----');
 
     client.publish(channel, json)
         .then(function () {
             console.log('----Published----');
+            logger.info('----Published----');
         })
         .catch(function (error) {
                 console.log('----Publish Error----');
                 console.log('error:', error);
+                logger.error('----Publish Error----');
+                logger.error(error.toString());
         });
 
     return messageID;
@@ -165,6 +187,7 @@ var Extender = {
 
             responseChannel = "/" + api + "/" + group + "/" + client_id + "/response";
             console.log('response channel: ',responseChannel);
+            logger.info('response channel: ' + responseChannel);
         }
 
         return callback(message);
@@ -203,6 +226,8 @@ var Extender = {
             }, function(error) {
                 console.log('----API Key DB Error----');
                 console.log('error:', error);
+                logger.error('----API Key DB Error----');
+                logger.error(error.toString());
             });
     }
 };
@@ -323,8 +348,11 @@ server.listen(3030, '192.168.200.238', function() {
             }
         }).then(function (msg) {
             console.log('----Subscribed: ' + responseChannel + '----');
+            logger.info('----Subscribed: ' + responseChannel + '----')
         }, function (error) {
             console.log('error:', error);
+            logger.error('----Subscription error----');
+            logger.error(error.toString());
         });
     });
 
