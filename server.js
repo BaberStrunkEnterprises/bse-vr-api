@@ -268,6 +268,7 @@ function responseApi(req, res, next) {
 
     var timeout = setTimeout(function() {
         console.log('----Timeout: '+ messageID +'----');
+        logger.error('----Timeout: '+ messageID +'----');
         var error = {
             status: 408,
             message: {
