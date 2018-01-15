@@ -24,7 +24,8 @@ var sha256 = require('js-sha256'),
     events = require('events'),
     moment = require('moment'),
     firenze = require('firenze'),
-    MysqlAdapter = require('firenze-adapter-mysql');
+    MysqlAdapter = require('firenze-adapter-mysql'),
+    os = require('os');
 
 var msgHandshake = '/meta/handshake',
     msgConnect = '/meta/connect',
@@ -34,15 +35,22 @@ var msgHandshake = '/meta/handshake',
 
 var token = process.env.VR_TOKEN,
     group = process.env.VR_GROUP,
-    version = '',
-    api = 'vr_store';
+    version = '';
 
 var EventEmitter = events.EventEmitter,
     ee = new EventEmitter(),
     waitTime = 0.5 * 60 * 1000;
 
-var responseChannel = '',
-    publishChannel = '/' + api + '/' + group + '/';
+var channels = {
+    vr_store: {
+        response: '',
+        publish: '/vr_store/' + group + '/'
+    },
+    crm_orders: {
+        response: '',
+        publish: '/crm_orders/' + group + '/'
+    }
+};
 
 var Database = firenze.Database,
     db = new Database({
@@ -65,6 +73,35 @@ process.on('uncaughtException', function(error) {
     console.log(error);
     logger.error(error.toString());
 });
+
+function getIPAddress() {
+    var ifaces = os.networkInterfaces();
+    var ip;
+
+    Object.keys(ifaces).forEach(function (ifname) {
+        var alias = 0;
+
+        ifaces[ifname].forEach(function (iface) {
+            if ('IPv4' !== iface.family || iface.internal !== false) {
+                // skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
+                return;
+            }
+
+            if (alias >= 1) {
+                // this single interface has multiple ipv4 addresses
+                //console.log(ifname + ':' + alias, iface.address);
+                ip = iface.address;
+            } else {
+                // this interface has only one ipv4 adress
+                //console.log(ifname, iface.address);
+                ip = iface.address;
+            }
+            ++alias;
+        });
+    });
+
+    return ip;
+}
 
 function convertToBase64(string) {
     var output = '';
@@ -89,16 +126,44 @@ function getRequest(message, options, api_key) {
 
     ver += message.replace(/^\//,'') + time.toString();
 
+    var api = whichApi(message);
+
     json[version] = options;
-    json[version].returnChannel = responseChannel;
+    json[version].returnChannel = channels[api].response;
     json[version].messageID = ver;
     json[version].currentTimeStamp =  new Date().toISOString();
 
     return json;
 }
 
+function whichApi(message) {
+    var pattern = new RegExp('crm_orders');
+
+    if(pattern.exec(message)) {
+        message = 'crm_orders';
+    }
+
+    switch(message) {
+        case 'new_opportunity': case 'crm_orders':
+            return 'crm_orders';
+        default:
+            return 'vr_store';
+    }
+}
+
+function whichLocation(message, options) {
+    switch(message) {
+        case 'new_opportunity':
+            return 'crmChannel';
+        default:
+            return options.siteID;
+    }
+}
+
 function publishToApi(message, options, api_key) {
-    var stid = options.siteID;
+    var api = whichApi(message);
+    var location = whichLocation(message, options);
+
     if(message === msgApiKeyRequest) {
         //options['expires'] = moment().add(1,'hours').format();
     }
@@ -107,8 +172,9 @@ function publishToApi(message, options, api_key) {
     }
 
     var json = getRequest(message, options, api_key),
-        channel = publishChannel + stid,
+        channel = channels[api].publish + location,
         messageID = json[version].messageID;
+
     console.log('----Publishing \''+ messageID + '\' to: ' + channel + '----');
     logger.info('----Publishing \''+ messageID + '\' to: ' + channel + '----');
 
@@ -156,15 +222,18 @@ function outgoingResponse(message, api_key, key) {
         type = '';
 
     var jsonString = JSON.stringify(message);
+    var api = null;
 
     if (message.channel === msgHandshake || message.channel === msgConnect) {
         return message;
     }
     else if (message.channel === msgSubscribe) {
         type = msgSubscribe;
+        api = whichApi(message.subscription);
     }
     else {
         type = message.data.message;
+        api = whichApi(type);
     }
 
     message.ext = {
@@ -185,11 +254,13 @@ var Extender = {
             var obj = JSON.parse(JSON.stringify(message)),
                 client_id = (obj.clientId);
 
-            responseChannel = "/" + api + "/" + group + "/" + client_id + "/response";
-            console.log('response channel: ',responseChannel);
-            logger.info('response channel: ' + responseChannel);
-        }
+            for(var index in channels) {
+                channels[index].response = "/" + index + "/" + group + "/" + client_id + "/response";
 
+                console.log(index + ' response channel: ', channels[index].response);
+                logger.info(index + ' response channel: ' + channels[index].response);
+            }
+        }
         return callback(message);
     },
     outgoing: function (message, callback) {
@@ -318,43 +389,50 @@ server.opts(/.*/, function (req,res,next) {
 server.get('/', responseHome);
 server.post('/:version/:message', responseApi);
 
-server.listen(3030, '192.168.200.238', function() {
+var ip = getIPAddress();
+
+server.listen(3030, ip , function() {
     console.log('%s listening at %s', server.name, server.url);
 
     client.connect(function () {
-        client.subscribe(responseChannel, function (message) {
-            var messageID = message.data[version].messageID;
-            if(message.data[version].successful) {
-                console.log('----Message Received: '+ messageID +'----');
-                ee.emit('messageReceived',message);
-            }
-            else {
-                var error_message = message.data[version].errorDescription;
-
-                if(error_message === undefined) {
-                    error_message = 'No error message defined.';
+        for(var index in channels) {
+            client.subscribe(channels[index].response, function (message) {
+                var messageID = message.data[version].messageID;
+                if (message.data[version].successful) {
+                    console.log('----Message Received: ' + messageID + '----');
+                    ee.emit('messageReceived', message);
                 }
+                else {
+                    var error_message = message.data[version].errorDescription;
 
-                console.log('----Message Error: '+ error_message +'----');
-                console.log('message:', message);
-                var error = {
-                    status: 402,
-                    message: {
-                        successful: false,
-                        message: error_message
+                    if (error_message === undefined) {
+                        error_message = 'No error message defined.';
                     }
-                }
 
-                ee.emit('errorReceived',error);
-            }
-        }).then(function (msg) {
-            console.log('----Subscribed: ' + responseChannel + '----');
-            logger.info('----Subscribed: ' + responseChannel + '----')
-        }, function (error) {
-            console.log('error:', error);
-            logger.error('----Subscription error----');
-            logger.error(error.toString());
-        });
+                    console.log('----Message Error: ' + error_message + '----');
+                    console.log('message:', message);
+                    var error = {
+                        status: 402,
+                        message: {
+                            successful: false,
+                            message: error_message
+                        }
+                    };
+
+                    ee.emit('errorReceived', error);
+                }
+            })
+                .then(function () {
+                    console.log('----Subscribed----');
+                    logger.info('----Subscribed----');
+                })
+                .catch(function (error) {
+                    console.log('----Subscription error----');
+                    console.log('error:', error);
+                    logger.error('----Subscription error----');
+                    logger.error(error.toString());
+                });
+        }
     });
 
 });
