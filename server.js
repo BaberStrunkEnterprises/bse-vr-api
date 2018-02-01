@@ -283,6 +283,7 @@ var Extender = {
                     return callback(message);
                 }
                 else {
+
                     var error = {
                         status: 401,
                         messageID: message.data.messageID,
@@ -386,8 +387,9 @@ server.opts(/.*/, function (req,res,next) {
     return next();
 });
 
-server.get('/', responseHome);
 server.post('/:version/:message', responseApi);
+server.get('/', responseHome);
+
 
 var ip = getIPAddress();
 
