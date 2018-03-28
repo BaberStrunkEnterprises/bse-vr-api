@@ -184,10 +184,12 @@ function publishToApi(message, options, api_key) {
             logger.info('----Published----');
         })
         .catch(function (error) {
-                console.log('----Publish Error----');
-                console.log('error:', error);
-                logger.error('----Publish Error----');
-                logger.error(error.toString());
+            console.log('----Publish Error----');
+            console.log('error:', error);
+            logger.error('----Publish Error----');
+            logger.error(error.toString());
+
+            ee.emit('errorReceived', error);
         });
 
     return messageID;
@@ -300,6 +302,8 @@ var Extender = {
                 console.log('error:', error);
                 logger.error('----API Key DB Error----');
                 logger.error(error.toString());
+
+                ee.emit('errorReceived', error);
             });
     }
 };
@@ -323,9 +327,15 @@ function responseApi(req, res, next) {
         api_key = req.headers['x-api-key'];
     }
 
+
+
     version = req.params.version;
 
     var options = {};
+
+    if(req.headers['x-store-number'] !== undefined || req.headers['x-store-number'] !== null) {
+        options['siteID'] = req.headers['x-store-number']
+    }
 
     for(var index in req.body ) {
         if(index === 'siteID') {
