@@ -1,6 +1,7 @@
 require('dotenv').config();
 const winston = require('winston');
 require('winston-daily-rotate-file');
+const axios = require('axios');
 
 var transport = new (winston.transports.DailyRotateFile)({
     filename: 'logs/.log',
@@ -73,6 +74,21 @@ process.on('uncaughtException', function(error) {
     console.log(error);
     logger.error(error.toString());
 });
+
+function pushToSlack(message) {
+    var url = 'https://hooks.slack.com/services/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';
+
+    axios({
+        method: 'post',
+        url: url,
+        headers: {
+            'Content-type': 'application/json'
+        },
+        data: {
+            text: message
+        }
+    });
+}
 
 function getIPAddress() {
     var ifaces = os.networkInterfaces();
@@ -261,6 +277,7 @@ var Extender = {
 
                 console.log(index + ' response channel: ', channels[index].response);
                 logger.info(index + ' response channel: ' + channels[index].response);
+                pushToSlack(index + ' response channel: ' + channels[index].response);
             }
         }
         return callback(message);
@@ -327,8 +344,6 @@ function responseApi(req, res, next) {
         api_key = req.headers['x-api-key'];
     }
 
-
-
     version = req.params.version;
 
     var options = {};
@@ -358,7 +373,7 @@ function responseApi(req, res, next) {
                 successful: false
             }
         };
-
+        pushToSlack(error.message.error);
         res.json(error.status,error.message);
         return next();
     }, waitTime);
@@ -379,6 +394,7 @@ function responseApi(req, res, next) {
 
     ee.on('errorReceived', function(message) {
         clearTimeout(timeout);
+        pushToSlack(message.message.error);
         res.json(message.status, message.message);
         return next();
     });
@@ -431,6 +447,7 @@ server.listen(3030, ip , function() {
                         }
                     };
 
+                    pushToSlack(error_message);
                     ee.emit('errorReceived', error);
                 }
             })
@@ -443,6 +460,7 @@ server.listen(3030, ip , function() {
                     console.log('error:', error);
                     logger.error('----Subscription error----');
                     logger.error(error.toString());
+                    pushToSlack(error.toString());
                 });
         }
     });

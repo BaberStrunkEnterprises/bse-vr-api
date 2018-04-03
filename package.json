@@ -4,6 +4,7 @@
   "description": "A Mostly REST Versirent API integration",
   "main": "server.js",
   "dependencies": {
+    "axios": "^0.18.0",
     "base64-js": "^1.2.0",
     "buffer": "^5.0.6",
     "dotenv": "^4.0.0",
