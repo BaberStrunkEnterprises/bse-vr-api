@@ -149,6 +149,8 @@ function getRequest(message, options, api_key) {
     json[version].messageID = ver;
     json[version].currentTimeStamp =  new Date().toISOString();
 
+    //pushToSlack(JSON.stringify(json));
+
     return json;
 }
 
@@ -204,6 +206,14 @@ function publishToApi(message, options, api_key) {
             console.log('error:', error);
             logger.error('----Publish Error----');
             logger.error(error.toString());
+
+            var error = {
+                status: error.code,
+                message: {
+                    error: '*' + error.toString() + '*  _\'' + message + '\'_ to: ' + channel,
+                    successful: false
+                }
+            };
 
             ee.emit('errorReceived', error);
         });
@@ -351,13 +361,34 @@ function responseApi(req, res, next) {
     if(req.headers['x-store-number'] !== undefined || req.headers['x-store-number'] !== null) {
         options['siteID'] = req.headers['x-store-number']
     }
+    else {
+        pushToSlack('Store undefined.');
+        console.log('----Error: '+ messageID +'----');
+        logger.error('----Error: '+ messageID +'----');
+        var error = {
+            status: 400,
+            message: {
+                error: 'Store Undefined',
+                successful: false
+            }
+        };
+        pushToSlack(error.message.error);
+        res.json(error.status,error.message);
+        return next();
+    }
 
-    for(var index in req.body ) {
+    var temp = req.body;
+
+    if(typeof req.body === 'string') {
+        temp = req.params;
+    }
+
+    for(var index in temp ) {
         if(index === 'siteID') {
-            options[index] = parseInt(req.body[index]);
+            options[index] = parseInt(temp[index]);
         }
         else {
-            options[index] = req.body[index];
+            options[index] = temp[index];
         }
     }
 
@@ -402,7 +433,9 @@ function responseApi(req, res, next) {
 
 var server = restify.createServer();
 server.use(restify.plugins.queryParser());
-server.use(restify.plugins.bodyParser());
+server.use(restify.plugins.bodyParser({
+    mapParams: true
+}));
 server.use(restify.plugins.CORS());
 
 server.opts(/.*/, function (req,res,next) {
