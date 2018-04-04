@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 require('dotenv').config();
 const winston = require('winston');
 require('winston-daily-rotate-file');
