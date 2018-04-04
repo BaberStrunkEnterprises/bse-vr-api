@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 require('dotenv').config();
 const winston = require('winston');
 require('winston-daily-rotate-file');
@@ -212,6 +210,7 @@ function publishToApi(message, options, api_key) {
             var error = {
                 status: error.code,
                 message: {
+                    messageID: messageID,
                     error: '*' + error.toString() + '*  _\'' + message + '\'_ to: ' + channel,
                     successful: false
                 }
@@ -364,7 +363,6 @@ function responseApi(req, res, next) {
         options['siteID'] = req.headers['x-store-number']
     }
     else {
-        pushToSlack('Store undefined.');
         console.log('----Error: '+ messageID +'----');
         logger.error('----Error: '+ messageID +'----');
         var error = {
@@ -426,19 +424,34 @@ function responseApi(req, res, next) {
     });
 
     ee.on('errorReceived', function(message) {
-        clearTimeout(timeout);
-        pushToSlack(message.message.error);
-        res.json(message.status, message.message);
-        return next();
+        if(message.message.messageID === messageID) {
+            clearTimeout(timeout);
+            pushToSlack(message.message.error);
+            res.json(message.status, message.message);
+            return next();
+        }
     });
 }
 
 var server = restify.createServer();
+
+const corsMiddleware = require('restify-cors-middleware');
+
+const cors = corsMiddleware({
+    origins: ['*'],
+    allowHeaders: ['*'],
+    exposeHeaders: ['*']
+});
+
+server.pre(cors.preflight);
+server.use(cors.actual);
+
+
 server.use(restify.plugins.queryParser());
 server.use(restify.plugins.bodyParser({
     mapParams: true
 }));
-server.use(restify.plugins.CORS());
+//server.use(restify.plugins.CORS());
 
 server.opts(/.*/, function (req,res,next) {
     res.header("Access-Control-Allow-Origin", "*");
@@ -451,7 +464,6 @@ server.opts(/.*/, function (req,res,next) {
 server.post('/:version/:message', responseApi);
 server.get('/', responseHome);
 
-
 var ip = getIPAddress();
 
 server.listen(3030, ip , function() {
@@ -460,7 +472,9 @@ server.listen(3030, ip , function() {
     client.connect(function () {
         for(var index in channels) {
             client.subscribe(channels[index].response, function (message) {
+
                 var messageID = message.data[version].messageID;
+
                 if (message.data[version].successful) {
                     console.log('----Message Received: ' + messageID + '----');
                     ee.emit('messageReceived', message);
@@ -496,6 +510,16 @@ server.listen(3030, ip , function() {
                     logger.error('----Subscription error----');
                     logger.error(error.toString());
                     pushToSlack(error.toString());
+
+                    var n_error = {
+                        status: 401,
+                        message: {
+                            successful: false,
+                            message: error_message
+                        }
+                    };
+
+                    ee.emit('errorReceived', n_error);
                 });
         }
     });

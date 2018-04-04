@@ -5,19 +5,20 @@
   "main": "server.js",
   "dependencies": {
     "axios": "^0.18.0",
-    "base64-js": "^1.2.0",
-    "buffer": "^5.0.6",
+    "base64-js": "^1.2.3",
+    "buffer": "^5.1.0",
+    "crossenv": "0.0.2-security",
     "dotenv": "^4.0.0",
     "faye": "^1.2.4",
     "faye-websocket": "^0.11.1",
     "firenze": "^0.6.0",
     "firenze-adapter-mysql": "^0.4.0",
-    "fs": "0.0.1-security",
     "js-sha256": "^0.5.0",
-    "moment": "^2.18.1",
-    "restify": "^4.3.0",
+    "moment": "^2.22.0",
+    "restify": "^6.4.*",
+    "restify-cors-middleware": "^1.1.0",
     "utf8": "^2.1.2",
-    "winston": "^2.4.0",
+    "winston": "^2.4.1",
     "winston-daily-rotate-file": "^1.7.2"
   }
 }
