@@ -196,6 +196,8 @@ function publishToApi(message, options, api_key) {
     console.log('----Publishing \''+ messageID + '\' to: ' + channel + '----');
     logger.info('----Publishing \''+ messageID + '\' to: ' + channel + '----');
 
+    pushToSlack(JSON.stringify(json));
+
     client.publish(channel, json)
         .then(function () {
             console.log('----Published----');
@@ -383,9 +385,34 @@ function responseApi(req, res, next) {
         temp = req.params;
     }
 
+    // Collect Deposit needs to be looked at
     for(var index in temp ) {
         if(index === 'siteID') {
             options[index] = parseInt(temp[index]);
+        }
+        else if(index === 'transactionType') {
+            options[index] = parseInt(temp[index]);
+        }
+        else if(index === 'points') {
+            options[index] = parseInt(temp[index]);
+        }
+        else if(index === 'totalPayment') {
+            options[index] = parseFloat(temp[index]);
+        }
+        else if(index === 'minimumAvailable') {
+            options[index] = parseInt(temp[index]);
+        }
+        else if(index === 'includeUsed') {
+            options[index] = (temp[index] === "true");
+        }
+        else if(index === 'includeNew') {
+            options[index] = (temp[index] === "true");
+        }
+        else if(index === 'depositAmount') {
+            options[index] = parseFloat(temp[index]);
+        }
+        else if(index === 'convenienceFee') {
+            options[index] = parseFloat(temp[index]);
         }
         else {
             options[index] = temp[index];
@@ -424,6 +451,7 @@ function responseApi(req, res, next) {
     });
 
     ee.on('errorReceived', function(message) {
+        console.log(message);
         if(message.message.messageID === messageID) {
             clearTimeout(timeout);
             pushToSlack(message.message.error);
@@ -446,7 +474,6 @@ const cors = corsMiddleware({
 server.pre(cors.preflight);
 server.use(cors.actual);
 
-
 server.use(restify.plugins.queryParser());
 server.use(restify.plugins.bodyParser({
     mapParams: true
@@ -463,6 +490,10 @@ server.opts(/.*/, function (req,res,next) {
 
 server.post('/:version/:message', responseApi);
 server.get('/', responseHome);
+
+server.on('uncaughtException', function (request, response, route, error) {
+
+});
 
 var ip = getIPAddress();
 
@@ -489,8 +520,9 @@ server.listen(3030, ip , function() {
                     console.log('----Message Error: ' + error_message + '----');
                     console.log('message:', message);
                     var error = {
-                        status: 402,
+                        status: 401,
                         message: {
+                            messageID: messageID,
                             successful: false,
                             message: error_message
                         }
