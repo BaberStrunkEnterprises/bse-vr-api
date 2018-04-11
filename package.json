@@ -7,18 +7,30 @@
     "axios": "^0.18.0",
     "base64-js": "^1.2.3",
     "buffer": "^5.1.0",
-    "crossenv": "0.0.2-security",
-    "dotenv": "^4.0.0",
+    "cords": "^1.0.4",
+    "cors": "^2.8.4",
+    "cross-env": "^5.1.4",
+    "dotenv": "^5.0.1",
+    "dotenv-webpack": "^1.5.5",
+    "express": "^4.16.3",
     "faye": "^1.2.4",
     "faye-websocket": "^0.11.1",
-    "firenze": "^0.6.0",
-    "firenze-adapter-mysql": "^0.4.0",
     "js-sha256": "^0.5.0",
     "moment": "^2.22.0",
-    "restify": "^6.4.*",
-    "restify-cors-middleware": "^1.1.0",
+    "mysql": "^2.15.0",
     "utf8": "^2.1.2",
     "winston": "^2.4.1",
     "winston-daily-rotate-file": "^1.7.2"
+  },
+  "devDependencies": {
+    "crossenv": "0.0.2-security",
+    "laravel-mix": "^2.1.11",
+    "node-sass": "^4.8.3"
+  },
+  "scripts": {
+    "dev": "node node_modules/cross-env/dist/bin/cross-env.js NODE_ENV=development node_modules/webpack/bin/webpack.js --progress --hide-modules --config=node_modules/laravel-mix/setup/webpack.config.js",
+    "watch": "node node_modules/cross-env/dist/bin/cross-env.js NODE_ENV=development node_modules/webpack/bin/webpack.js --watch --progress --hide-modules --config=node_modules/laravel-mix/setup/webpack.config.js",
+    "hot": "node node_modules/cross-env/dist/bin/cross-env.js NODE_ENV=development node_modules/webpack-dev-server/bin/webpack-dev-server.js --inline --hot --config=node_modules/laravel-mix/setup/webpack.config.js",
+    "production": "node node_modules/cross-env/dist/bin/cross-env.js NODE_ENV=production node_modules/webpack/bin/webpack.js --progress --hide-modules --config=node_modules/laravel-mix/setup/webpack.config.js"
   }
 }
