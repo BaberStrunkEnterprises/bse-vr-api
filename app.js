@@ -1,36 +1,16 @@
 require('dotenv').config();
-const winston = require('winston');
-require('winston-daily-rotate-file');
-const axios = require('axios');
+var vr = require('./src/vr').vr,
+    response = require('./src/response').response,
+    logger = require('./src/logger').logger,
+    slack = require('./src/slack').slack;
 
-var transport = new (winston.transports.DailyRotateFile)({
-    filename: 'logs/.log',
-    level: 'debug',
-    datePattern: 'yyyy-MM-dd',
-    prepend: true,
-    maxDays: 30
-});
-
-const logger = new (winston.Logger)({
-    transports: [
-        transport
-    ],
-    exitOnError: false
-});
-
-var sha256 = require('js-sha256'),
-    utf8 = require('utf8'),
-    Faye = require('faye'),
+var Faye = require('faye'),
     events = require('events'),
-    moment = require('moment'),
     os = require('os'),
     express = require('express'),
     cors = require('cors');
 
-var msgHandshake = '/meta/handshake',
-    msgConnect = '/meta/connect',
-    msgSubscribe = '/meta/subscribe',
-    msgApiKeyRequest = 'api_authorize_temporary_key',
+var msgApiKeyRequest = 'api_authorize_temporary_key',
     msgApiKeyRevoke = 'api_revoke_temporary_key';
 
 var token = process.env.VR_TOKEN,
@@ -40,42 +20,6 @@ var token = process.env.VR_TOKEN,
 var EventEmitter = events.EventEmitter,
     ee = new EventEmitter(),
     waitTime = 0.5 * 60 * 1000;
-
-var channels = {
-    vr_store: {
-        response: '',
-        publish: '/vr_store/' + group + '/'
-    },
-    crm_orders: {
-        response: '',
-        publish: '/crm_orders/' + group + '/'
-    }
-};
-
-var mysql      = require('mysql');
-var connection = mysql.createConnection({
-    host     : process.env.DB_HOST,
-    user     : process.env.DB_USER,
-    password : process.env.DB_PASSWORD,
-    database : process.env.DB_DATABASE
-});
-
-var client = new Faye.Client(process.env.VR_URL);
-
-function pushToSlack(message) {
-    var url = 'https://hooks.slack.com/services/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';
-
-    axios({
-        method: 'post',
-        url: url,
-        headers: {
-            'Content-type': 'application/json'
-        },
-        data: {
-            text: message
-        }
-    });
-}
 
 function getIPAddress() {
     var ifaces = os.networkInterfaces();
@@ -106,232 +50,16 @@ function getIPAddress() {
     return ip.toString();
 }
 
-function convertToBase64(string) {
-    var output = '';
-    output = new Buffer(string).toString('base64');
-
-    return output;
-}
-
-function getRequest(message, options, api_key) {
-    var json = {
-        message: message,
-        api_key: api_key
-    };
-
-    var date = new Date(),
-        time = date.getTime(),
-        ver = '';
-
-    if(options.siteID !== undefined) {
-        ver = options.siteID;
-    }
-
-    ver += message.replace(/^\//,'') + time.toString();
-
-    var api = whichApi(message);
-
-    json[version] = options;
-    json[version].returnChannel = channels[api].response;
-    json[version].messageID = ver;
-    json[version].currentTimeStamp =  new Date().toISOString();
-
-    //pushToSlack(JSON.stringify(json));
-
-    return json;
-}
-
-function whichApi(message) {
-    var pattern = new RegExp('crm_orders');
-
-    if(pattern.exec(message)) {
-        message = 'crm_orders';
-    }
-
-    switch(message) {
-        case 'new_opportunity': case 'crm_orders':
-        return 'crm_orders';
-        default:
-            return 'vr_store';
-    }
-}
-
-function whichLocation(message, options) {
-    switch(message) {
-        case 'new_opportunity':
-            return 'crmChannel';
-        default:
-            return options.siteID;
-    }
-}
-
-function publishToApi(message, options, api_key) {
-    var api = whichApi(message);
-    var location = whichLocation(message, options);
-
-    if(message === msgApiKeyRequest) {
-        //options['expires'] = moment().add(1,'hours').format();
-    }
-    if(message === msgApiKeyRevoke) {
-        options['temp_token'] = api_key;
-    }
-
-    var json = getRequest(message, options, api_key),
-        channel = channels[api].publish + location,
-        messageID = json[version].messageID;
-
-    console.log('----Publishing \''+ messageID + '\' to: ' + channel + '----');
-    logger.info('----Publishing \''+ messageID + '\' to: ' + channel + '----');
-
-    pushToSlack(JSON.stringify(json));
-
-    client.publish(channel, json)
-        .then(function () {
-            console.log('----Published----');
-            logger.info('----Published----');
-        })
-        .catch(function (error) {
-            console.log('----Publish Error----');
-            console.log('error:', error);
-            logger.error('----Publish Error----');
-            logger.error(error.toString());
-
-            var error = {
-                status: error.code,
-                message: {
-                    messageID: messageID,
-                    error: '*' + error.toString() + '*  _\'' + message + '\'_ to: ' + channel,
-                    successful: false
-                }
-            };
-
-            ee.emit('errorReceived', error);
-        });
-
-    return messageID;
-
-}
-
-function createSignature(salt, json, key) {
-    var utf8Json = utf8.encode(json),
-        utf8Key = utf8.encode(key),
-        utf8Salt = utf8.encode(salt);
-
-    var encodedJson = sha256(utf8Json),
-        encodedJsonPlusKey = sha256(encodedJson + utf8Key),
-        encodedJsonPlusKeyPlusSalt = sha256(encodedJsonPlusKey + utf8Salt);
-
-    return encodedJsonPlusKeyPlusSalt;
-}
-
-function generateSalt() {
-    var charString = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        salt = '';
-
-    for(var i = 0; i < 16; i++) {
-        salt += charString[Math.floor(Math.random() * charString.length)];
-    }
-    return salt;
-
-}
-
-function outgoingResponse(message, api_key, key) {
-    var salt = generateSalt(),
-        type = '';
-
-    var jsonString = JSON.stringify(message);
-    var api = null;
-
-    if (message.channel === msgHandshake || message.channel === msgConnect) {
-        return message;
-    }
-    else if (message.channel === msgSubscribe) {
-        type = msgSubscribe;
-        api = whichApi(message.subscription);
-    }
-    else {
-        type = message.data.message;
-        api = whichApi(type);
-    }
-
-    message.ext = {
-        "api": api,
-        "token": api_key,
-        "salt": convertToBase64(salt),
-        "signature": createSignature(salt, jsonString, key),
-        "message": type,
-        "data": convertToBase64(jsonString)
-    };
-
-    return message;
-}
-
-var Extender = {
-    incoming: function (message, callback) {
-        if (message.channel === msgHandshake && message.successful) {
-            var obj = JSON.parse(JSON.stringify(message)),
-                client_id = (obj.clientId);
-
-            for(var index in channels) {
-                channels[index].response = "/" + index + "/" + group + "/" + client_id + "/response";
-
-                console.log(index + ' response channel: ', channels[index].response);
-                logger.info(index + ' response channel: ' + channels[index].response);
-                pushToSlack(index + ' response channel: ' + channels[index].response);
-            }
-        }
-        if(message.data !== undefined) {
-            console.log('incoming', message.data);
-        }
-        return callback(message);
-    },
-    outgoing: function (message, callback) {
-        if(message.data !== undefined && message.data.api_key !== undefined) {
-            var api_key = message.data.api_key;
-            delete message.data.api_key;
-        }
-        else if(message.data !== undefined) {
-            delete message.data.api_key;
-            api_key = token;
-        }
-        else {
-            api_key = token;
-        }
-
-        var query = connection.query('SELECT * FROM `keys` where token = ?',[api_key], function (error, results, fields) {
-            if (error) throw error;
-
-            var key = results[0].key;
-
-            if(key === null) {
-                console.log('----API Key DB Error----');
-                console.log('error:', error);
-                logger.error('----API Key DB Error----');
-                logger.error(error.toString());
-
-                ee.emit('errorReceived', error);
-                return;
-            }
-
-            message = outgoingResponse(message, api_key, key);
-
-            if(message.data !== undefined) {
-                console.log('outgoing', message);
-            }
-            return callback(message);
-        });
-    }
-};
-
-client.addExtension(Extender);
-client.disable('WebSocket');
-
 function responseHome(req, res, next) {
-    res.send(200,'BSE VersiRent API ');
-    return next();
+    var string = 'BSE VR API';
+    response.init(req, res, next);
+    response.success(string);
+    //return next();
 }
 
 function responseApi(req, res, next) {
+    response.res = res;
+    console.log('received http req');
     var message = req.params.message,
         api_key = null;
 
@@ -350,18 +78,10 @@ function responseApi(req, res, next) {
         options['siteID'] = parseInt(req.headers['x-store-number']);
     }
     else {
-        console.log('----Error: '+ messageID +'----');
-        logger.error('----Error: '+ messageID +'----');
-        var error = {
-            status: 400,
-            message: {
-                error: 'Store Undefined',
-                successful: false
-            }
-        };
-        pushToSlack(error.message.error);
-        res.status(error.status).json(error.message);
-        return next();
+        var error = 'Store Undefined';
+        logger.error(error);
+        slack.push(error);
+        response.error(null, 400, error);
     }
 
     var temp = req.body;
@@ -373,7 +93,7 @@ function responseApi(req, res, next) {
     // Collect Deposit needs to be looked at
     for(var index in temp ) {
         if(index === 'siteID') {
-            options[index] = parseInt(temp[index]);
+            // do nothing
         }
         else if(index === 'transactionType') {
             options[index] = parseInt(temp[index]);
@@ -403,22 +123,15 @@ function responseApi(req, res, next) {
             options[index] = temp[index];
         }
     }
-
-    var messageID = publishToApi(message, options, api_key);
+    console.log('before publish');
+    var messageID = vr.publish(message, options, api_key);
+    console.log('after publish');
 
     var timeout = setTimeout(function() {
-        console.log('----Timeout: '+ messageID +'----');
-        logger.error('----Timeout: '+ messageID +'----');
-        var error = {
-            status: 408,
-            message: {
-                error: 'Timeout Detected.  Probable cause: Return data set too large.',
-                successful: false
-            }
-        };
-        pushToSlack(error.message.error);
-        res.status(error.status).json(error.message);
-        return next();
+        var string = '----Timeout: '+ messageID +'----';
+        logger.error(string);
+        slack.push(string);
+        response.error(messageID, 500, string);
     }, waitTime);
 
     ee.on('messageReceived', function(message) {
@@ -430,8 +143,7 @@ function responseApi(req, res, next) {
 
         if(message.data[version].messageID === messageID) {
             clearTimeout(timeout);
-            res.status(200).json( message);
-            return next();
+            response.success(message);
         }
     });
 
@@ -439,86 +151,30 @@ function responseApi(req, res, next) {
         console.log(message);
         //if(message.message.messageID === messageID) {
             clearTimeout(timeout);
-            pushToSlack(message.message.error);
-            res.status(message.status).json( message.message);
-            return next();
+            slack.push(message.message.error);
+            response.error(messageID, message.status, message.message);
+            //return next();
         //}
     });
 }
 
-var server = express();
+var app = express(),
+    client = new Faye.Client(process.env.VR_URL);
 
-server.on('uncaughtException', function (request, response, route, error) {
+app.on('uncaughtException', function (request, response, route, error) {});
 
-});
-server.use(cors());
+app.use(cors());
+app.options('*', cors());
 
-server.options('*', cors());
-
-server.post('/:version/:message', responseApi);
-server.get('/', responseHome);
-
+app.post('/:version/:message', responseApi);
+app.get('/', responseHome);
 
 var ip = getIPAddress();
-
-server.listen({
+app.listen({
     port: 3030,
-    host: ip
-}, function() {
-    client.connect(function () {
-        for (var index in channels) {
-            client.subscribe(channels[index].response, function (message) {
-                var messageID = message.data[version].messageID;
-
-                if (message.data[version].successful) {
-                    console.log('----Message Received: ' + messageID + '----');
-                    ee.emit('messageReceived', message);
-                }
-                else {
-                    var error_message = message.data[version].errorDescription;
-
-                    if (error_message === undefined) {
-                        error_message = 'No error message defined.';
-                    }
-
-                    console.log('----Message Error: ' + error_message + '----');
-                    console.log('message:', message);
-
-                    var error = {
-                        status: 400,
-                        message: {
-                            messageID: messageID,
-                            successful: false,
-                            message: error_message
-                        }
-                    };
-
-                    pushToSlack(error_message);
-                    ee.emit('errorReceived', error);
-                }
-            })
-                .then(function () {
-                    console.log('----Subscribed----');
-                    logger.info('----Subscribed----');
-                })
-                .catch(function (error) {
-                    console.log('----Subscription error----');
-                    console.log('error:', error);
-                    logger.error('----Subscription error----');
-                    logger.error(error.toString());
-                    pushToSlack(error.toString());
-
-                    var n_error = {
-                        status: 401,
-                        message: {
-                            successful: false,
-                            message: error_message
-                        }
-                    };
-
-                    ee.emit('errorReceived', n_error);
-                });
-        }
-    });
-}
+    //hostname: 'dev.api.local',
+},
+    function () {
+        vr.connect();
+    }
 );
