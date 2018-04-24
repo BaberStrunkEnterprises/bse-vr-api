@@ -45,7 +45,7 @@ app.get('/', responseHome);
 var ip = getIPAddress();
 app.listen({
         port: 3030,
-        //hostname: 'api.bse.solutions',
+        hostname: 'api.bse.solutions',
     },
     function () {
        logger.info('---- Server Started ----');
