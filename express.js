@@ -45,7 +45,7 @@ app.get('/', responseHome);
 var ip = getIPAddress();
 app.listen({
         port: 3030,
-        hostname: 'api.bse.solutions',
+        //hostname: 'api.bse.solutions',
     },
     function () {
        logger.info('---- Server Started ----');
@@ -68,7 +68,7 @@ function responseApi(req, res, next) {
     });
 
     timeout = setTimeout(function() {
-        logger.error('---- Request Timed Out ----');
+        logger.error('---- Request Timed Out: '+ extender.get_channel() + ' ----');
 
         return response.error('general',500, 'Request Timed Out');
     }, time_lapse);
@@ -114,7 +114,7 @@ function publish(message, options) {
             return response.error(json[version].messageID, 400, error);
         });
 
-    return messageID;
+    //return messageID;
 }
 
 function error(error) {
@@ -217,28 +217,43 @@ function getRequest(message, options, api_key) {
 }
 
 function typeSetOptions(options) {
+    let output = {};
+    console.log(options);
     for(var index in options) {
         switch(index) {
             case 'siteID':
             case 'transactionType':
             case 'points':
             case 'minimumAvailable':
-                options[index] = parseInt(options[index]);
+                output[index] = parseInt(options[index]);
                 break;
             case 'totalPayment':
             case 'depositAmount':
             case 'convenienceFee':
-                options[index] = parseFloat(options[index]);
+                output[index] = parseFloat(options[index]);
                 break;
             case 'includeUsed':
             case 'includeNew':
-                options[index] = (options[index] === "true");
+                output[index] = (options[index] === "true");
                 break;
             default:
-                options[index] = options[index];
+                let re = /([a-zA-Z0-9_]+)\[[0-9]+\]\[([a-zA-Z0-9_]+)\]/,
+                    matches = index.match(re);
+
+                if(matches !== null) {
+                    if(output[matches[1]] === undefined) {
+                        output[matches[1]] = [];
+                    }
+                    output[matches[1]].push({
+                        [matches[2]]: options[index],
+                    });
+                }
+                else {
+                    output[index] = options[index];
+                }
                 break;
         }
     }
-
-    return options;
+    console.log(output);
+    return output;
 }
