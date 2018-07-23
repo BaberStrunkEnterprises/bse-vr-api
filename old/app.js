@@ -1,8 +1,8 @@
 require('dotenv').config();
-var vr = require('./src/vr').vr,
-    response = require('./src/response').response,
-    logger = require('./src/logger').logger,
-    slack = require('./src/slack').slack;
+var vr = require('../src/vr').vr,
+    response = require('../src/response').response,
+    logger = require('../src/logger').logger,
+    slack = require('../src/slack').slack;
 
 var Faye = require('faye'),
     events = require('events'),

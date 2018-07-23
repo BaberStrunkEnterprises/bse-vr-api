@@ -24,7 +24,70 @@ const version = process.env.VR_VERSION;
 var response_channel = null,
     api_key = null;
 
-exports.extender = {
+function createSignature(salt, json, key) {
+    var utf8Json = utf8.encode(json),
+        utf8Key = utf8.encode(key),
+        utf8Salt = utf8.encode(salt);
+
+    var encodedJson = sha256(utf8Json),
+        encodedJsonPlusKey = sha256(encodedJson + utf8Key),
+        encodedJsonPlusKeyPlusSalt = sha256(encodedJsonPlusKey + utf8Salt);
+
+    return encodedJsonPlusKeyPlusSalt;
+}
+
+function generateSalt() {
+    var charString = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+        salt = '';
+
+    for(var i = 0; i < 16; i++) {
+        salt += charString[Math.floor(Math.random() * charString.length)];
+    }
+    return salt;
+
+}
+
+function convertToBase64(string) {
+    var output = '';
+    output = new Buffer(string).toString('base64');
+
+    return output;
+}
+
+function changeOutgoing(data)  {
+    let message = data.message,
+        api_key = data.api_key,
+        api_name = data.api_name,
+        key = data.key;
+    var salt = generateSalt(),
+        type = '';
+
+    var jsonString = JSON.stringify(message);
+
+    if (message.channel === msgHandshake || message.channel === msgConnect) {
+        return message;
+    }
+    else if (message.channel === msgSubscribe) {
+        type = msgSubscribe;
+    }
+    else {
+        type = message.data.message;
+    }
+
+    message.ext = {
+        "api": api_name,
+        "token": api_key,
+        "salt": convertToBase64(salt),
+        "signature": createSignature(salt, jsonString, key),
+        "message": type,
+        "data": convertToBase64(jsonString)
+    };
+
+    return message;
+};
+
+
+let extender = {
     api_name: 'vr_store',
     location: group,
     init: function(data) {
@@ -56,7 +119,7 @@ exports.extender = {
             var obj = JSON.parse(JSON.stringify(message)),
                 client_id = (obj.clientId);
 
-                response_channel = "/" + api_name + "/" + process.env.VR_GROUP + "/" + client_id + "/response";
+                response_channel = "/" + this.api_name + "/" + process.env.VR_GROUP + "/" + client_id + "/response";
                 logger.info('response channel: ' + response_channel);
         }
 
@@ -85,72 +148,21 @@ exports.extender = {
                 return;
             }
 
-            message = outgoingResponse(message, api_key, key, api_name);
+            let data = {
+                message,
+                api_key,
+                key,
+                api_name: this.api_name,
+            };
+
+            message = changeOutgoing(data);
 
             if(message.data !== undefined) {
                 //console.log('outgoing', message);
             }
             return callback(message);
         });
-    }
-
+    },
 };
 
-function outgoingResponse(message, api_key, key, api_name) {
-    var salt = generateSalt(),
-        type = '';
-
-    var jsonString = JSON.stringify(message);
-    var api = null;
-
-    if (message.channel === msgHandshake || message.channel === msgConnect) {
-        return message;
-    }
-    else if (message.channel === msgSubscribe) {
-        type = msgSubscribe;
-    }
-    else {
-        type = message.data.message;
-    }
-
-    message.ext = {
-        "api": api_name,
-        "token": api_key,
-        "salt": convertToBase64(salt),
-        "signature": createSignature(salt, jsonString, key),
-        "message": type,
-        "data": convertToBase64(jsonString)
-    };
-
-    return message;
-}
-
-function createSignature(salt, json, key) {
-    var utf8Json = utf8.encode(json),
-        utf8Key = utf8.encode(key),
-        utf8Salt = utf8.encode(salt);
-
-    var encodedJson = sha256(utf8Json),
-        encodedJsonPlusKey = sha256(encodedJson + utf8Key),
-        encodedJsonPlusKeyPlusSalt = sha256(encodedJsonPlusKey + utf8Salt);
-
-    return encodedJsonPlusKeyPlusSalt;
-}
-
-function generateSalt() {
-    var charString = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        salt = '';
-
-    for(var i = 0; i < 16; i++) {
-        salt += charString[Math.floor(Math.random() * charString.length)];
-    }
-    return salt;
-
-}
-
-function convertToBase64(string) {
-    var output = '';
-    output = new Buffer(string).toString('base64');
-
-    return output;
-}
+exports.extender = extender;
