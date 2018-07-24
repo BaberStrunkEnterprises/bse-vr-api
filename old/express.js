@@ -1,11 +1,11 @@
 require('dotenv').config();
-var response = require('./src/response').response,
-    logger = require('./src/logger').logger;
+var response = require('../src/response').response,
+    logger = require('../src/logger').logger;
 
 var Faye = require('faye'),
     events = require('events'),
     os = require('os'),
-    express = require('express'),
+    express = require('old/express'),
     cors = require('cors');
 
 var msgApiKeyRequest = 'api_authorize_temporary_key',
@@ -18,7 +18,7 @@ var token = process.env.VR_TOKEN,
 var app = express(),
     bodyParser = require('body-parser'),
     client = new Faye.Client(process.env.VR_URL),
-    extender = require('./src/extender').extender;
+    extender = require('../src/extender').extender;
 
 var timeout;
 const time_lapse = .5 * 60 * 1000;

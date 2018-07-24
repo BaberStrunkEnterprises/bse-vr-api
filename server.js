@@ -1,6 +1,5 @@
 require('dotenv').config();
-let response = require('./src/response').response,
-    logger = require('./src/logger').logger;
+let logger = require('./src/logger').logger;
 
 let express = require('express'),
     cors = require('cors');
@@ -16,7 +15,7 @@ app.options('*', cors());
 
 let api = require('./src/api').api;
 
-app.post('/:version/:message', api.responseApi, api.sendResponse);
+app.post('/:version/:message', api.responseApi);//, api.sendResponse);
 app.get('/', api.responseHome);
 
 app.listen({

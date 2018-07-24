@@ -55,19 +55,20 @@ function convertToBase64(string) {
 }
 
 function changeOutgoing(data)  {
-    let message = data.message,
-        api_key = data.api_key,
-        api_name = data.api_name,
-        key = data.key;
-    var salt = generateSalt(),
-        type = '';
-
-    var jsonString = JSON.stringify(message);
+    let message = data.message;
 
     if (message.channel === msgHandshake || message.channel === msgConnect) {
         return message;
     }
-    else if (message.channel === msgSubscribe) {
+
+    let api_key = data.api_key,
+        api_name = data.api_name,
+        key = data.key,
+        salt = generateSalt(),
+        type = '',
+        jsonString = JSON.stringify(message);
+
+    if (message.channel === msgSubscribe) {
         type = msgSubscribe;
     }
     else {
@@ -83,13 +84,27 @@ function changeOutgoing(data)  {
         "data": convertToBase64(jsonString)
     };
 
-    return message;
-};
+    if(process.env.DEBUG) {
+        logger.info('---- Outgoing Message ----');
+        logger.info(JSON.stringify(message));
+    }
 
+    return message;
+}
+
+function whichApi (message) {
+    switch(message) {
+        case 'new_opportunity':
+            return 'crm_orders';
+        default:
+            return 'vr_store';
+    }
+}
 
 let extender = {
     api_name: 'vr_store',
     location: group,
+    response_channel: null,
     init: function(data) {
         this.api_name = data['api_name'];
 
@@ -103,7 +118,7 @@ let extender = {
         }
     },
     get_channel: function() {
-        return response_channel;
+        return this.response_channel;
     },
     get_group: function() {
         return group;
@@ -119,8 +134,8 @@ let extender = {
             var obj = JSON.parse(JSON.stringify(message)),
                 client_id = (obj.clientId);
 
-                response_channel = "/" + this.api_name + "/" + process.env.VR_GROUP + "/" + client_id + "/response";
-                logger.info('response channel: ' + response_channel);
+                this.response_channel = "/" + this.api_name + "/" + process.env.VR_GROUP + "/" + client_id + "/response";
+                logger.info('response channel: ' + this.response_channel);
         }
 
         return callback(message);
@@ -136,13 +151,16 @@ let extender = {
         }
 
         var query = connection.query('SELECT * FROM `keys` where token = ?',[api_key], function (error, results, fields) {
+            //logger.info('---- API KEY grabbed and processing outgoing request ----');
             if (error) throw error;
 
-            var key = results[0].key;
+
+            var key = results[0].key,
+                api_name = whichApi(message.channel);
 
             if(key === null) {
-                Logger.error('----API Key DB Error----');
-                Logger.error(error.toString());
+                logger.error('----API Key DB Error----');
+                logger.error(error.toString());
 
                 ee.emit('errorReceived', error);
                 return;
@@ -152,7 +170,7 @@ let extender = {
                 message,
                 api_key,
                 key,
-                api_name: this.api_name,
+                api_name,
             };
 
             message = changeOutgoing(data);

@@ -8,6 +8,7 @@ exports.response = {
     message: null,
     error_message: null,
     status: null,
+    full_message: null,
 
     init: function(req, res, next) {
         this.request = req;
@@ -18,7 +19,9 @@ exports.response = {
         this.message = message;
         this.error_message = null;
         this.status = 200;
-        this.next();
+
+        return this.response.status(this.status).type('json').send(this.message);
+
     },
     error: function (id, status, message) {
         Logger.error(message);
@@ -33,7 +36,9 @@ exports.response = {
         this.error_message = error;
         this.status = status;
         this.message = null;
-        this.next();
+
+
+        return this.response.status(this.status).type('json').send(this.error_message);
     }
 
 };

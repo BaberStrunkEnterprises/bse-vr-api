@@ -1,16 +1,24 @@
 require('dotenv').config();
 var Faye = require('faye'),
-    logger = require('./logger').logger,
-    response = require('./response').response;
+    logger = require('./logger').logger;
 
-exports.api = {
+let timeout = null;
+
+let api = {
     responseHome: function(req, res, next) {
-        var string = 'BSE VR API';
+        let string = 'BSE VR API',
+            response = this.response;
         response.init(req, res, next);
         return response.success(string);
         //return next();
     },
     sendResponse: function(req, res, next) {
+        let response = this.response;
+
+        if(process.env.DEBUG) {
+            logger.info(response.full_message);
+        }
+
         if(response.message !== null) {
             return res.status(response.status).type('json').send(response.message);
         }
@@ -20,9 +28,9 @@ exports.api = {
     },
     responseApi: function(req, res, next) {
         let client = new Faye.Client(process.env.VR_URL),
-            extender = require('./extender').extender;
+            extender = require('./extender').extender,
+            response = require('./response').response;
 
-        let timeout;
         const time_lapse = .5 * 60 * 1000;
 
         client.addExtension(extender);
@@ -32,16 +40,13 @@ exports.api = {
         let message = req.params.message,
             version = req.params.version,
             uri = '/' + version + '/' + message,
-            options = typeSetOptions(req.body),
-            api_name = whichApi(message);
+            location = req.headers['x-store-number'],
+            options = typeSetOptions(req.body);
+
 
         response.init(req, res, next);
 
-        logger.info('---- HTTP Request Received: '+ uri + ' ----');
-
-        extender.init({
-            api_name: api_name
-        });
+        logger.info('---- HTTP Request Received: '+ uri + 'for '+ location + ' ----');
 
         timeout = setTimeout(function() {
             logger.error('---- Request Timed Out: '+ extender.get_channel() + ' ----');
@@ -49,19 +54,32 @@ exports.api = {
             return response.error('general',500, 'Request Timed Out');
         }, time_lapse);
 
-        client.connect(function () {
-            logger.info('---- Connected to VR API ----');
+        let data = {
+            message,
+            options,
+            extender,
+            client,
+        };
 
-            client.subscribe(extender.get_channel(), messageReceived)
-                .then(publish(extender, message, options))
+        let connection = client.connect(() => {
+            let channel = extender.get_channel();
+
+            logger.info('---- Subscribing to: ' + channel + ' ----');
+
+            client.subscribe(channel, messageReceived)
+                .then(publish(data))
                 .catch(error);
-
         });
     }
 };
 
-function publish(extender, message, options) {
+function publish(data) {
     logger.info('---- Subscribed ----');
+
+    let message = data.message,
+        options = data.options,
+        extender = data.extender,
+        client = data.client;
 
     var api = extender.api_name,
         location = options.siteID,
@@ -70,8 +88,7 @@ function publish(extender, message, options) {
         api_key = extender.get_api_key();
 
     var json = getRequest(extender, message, options, api_key),
-        channel = '/' + api + '/' + group + '/' + location,
-        messageID = json[version].messageID;
+        channel = '/' + api + '/' + group + '/' + locationl
 
     logger.info('---- Publishing to: ' + channel + ' ----');
 
@@ -92,7 +109,7 @@ function error(error) {
     logger.log(error);
 
     clearTimeout(timeout);
-    return response.error('general',400, error);
+    return api.response.error('general',400, error);
 }
 
 function messageReceived(message) {
@@ -100,56 +117,25 @@ function messageReceived(message) {
 
     clearTimeout(timeout);
 
-    var version = extender.get_version(),
+    api.response.full_message = message;
+
+    if(process.env.DEBUG) {
+        logger.info(message);
+    }
+
+
+    let version = process.env.VR_VERSION,
         messageID = message.data[version].messageID;
 
     if (message.data[version].successful) {
         //logger.info('---- Successful ----');
 
-        return response.success(message);
+        return api.response.success(message);
     }
     else {
         logger.error('---- Failed ----');
 
-        return response.error(messageID, 400, message);
-    }
-}
-
-function getIPAddress() {
-    var ifaces = os.networkInterfaces();
-    var ip;
-
-    Object.keys(ifaces).forEach(function (ifname) {
-        var alias = 0;
-
-        ifaces[ifname].forEach(function (iface) {
-            if ('IPv4' !== iface.family || iface.internal !== false) {
-                // skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
-                return;
-            }
-
-            if (alias >= 1) {
-                // this single interface has multiple ipv4 addresses
-                //console.log(ifname + ':' + alias, iface.address);
-                ip = iface.address;
-            } else {
-                // this interface has only one ipv4 adress
-                //console.log(ifname, iface.address);
-                ip = iface.address;
-            }
-            ++alias;
-        });
-    });
-
-    return ip.toString();
-}
-
-function whichApi(message) {
-    switch(message) {
-        case 'new_opportunity':
-            return 'crm_orders';
-        default:
-            return 'vr_store';
+        return api.response.error(messageID, 400, message);
     }
 }
 
@@ -159,8 +145,6 @@ function getRequest(extender, message, options, api_key) {
         message: message,
         api_key: api_key
     };
-
-    console.log(message);
 
     var date = new Date(),
         time = date.getTime(),
@@ -221,3 +205,5 @@ function typeSetOptions(options) {
     }
     return output;
 }
+
+exports.api = api;
