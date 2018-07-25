@@ -54,7 +54,7 @@ app.listen({
 
 function responseApi(req, res, next) {
     var message = req.params.message,
-        version = req.params.version
+        version = req.params.version,
         uri = '/' + version + '/' + message,
         options = typeSetOptions(req.body),
         api_name = whichApi(message);

@@ -1,17 +1,17 @@
 require('dotenv').config();
-let logger = require('./logger').logger,
+var logger = require('./logger').logger,
     sha256 = require('js-sha256'),
     utf8 = require('utf8');
 
-let mysql      = require('mysql');
-let connection = mysql.createConnection({
+var mysql      = require('mysql');
+var connection = mysql.createConnection({
     host     : process.env.DB_HOST,
     user     : process.env.DB_USER,
     password : process.env.DB_PASSWORD,
     database : process.env.DB_DATABASE
 });
 
-let msgHandshake = '/meta/handshake',
+var msgHandshake = '/meta/handshake',
     msgConnect = '/meta/connect',
     msgSubscribe = '/meta/subscribe',
     msgApiKeyRequest = 'api_authorize_temporary_key',
@@ -21,7 +21,7 @@ const token = process.env.VR_TOKEN;
 const group = process.env.VR_GROUP;
 const version = process.env.VR_VERSION;
 
-let response_channel = null,
+var response_channel = null,
     api_key = null;
 
 exports.extender = {
@@ -53,17 +53,16 @@ exports.extender = {
     },
     incoming: function (message, callback) {
         if (message.channel === msgHandshake && message.successful) {
-            let obj = JSON.parse(JSON.stringify(message)),
+            var obj = JSON.parse(JSON.stringify(message)),
                 client_id = (obj.clientId);
 
-                response_channel = "/" + this.api_name + "/" + process.env.VR_GROUP + "/" + client_id + "/response";
+                response_channel = "/" + api_name + "/" + process.env.VR_GROUP + "/" + client_id + "/response";
                 logger.info('response channel: ' + response_channel);
         }
 
         return callback(message);
     },
     outgoing: function (message, callback) {
-        let api_name = this.api_name;
         api_key = token;
         if(message.data !== undefined && message.data.api_key !== undefined) {
             api_key = message.data.api_key;
@@ -73,10 +72,10 @@ exports.extender = {
             delete message.data.api_key;
         }
 
-        let query = connection.query('SELECT * FROM `keys` where token = ?',[api_key], function (error, results, fields) {
+        var query = connection.query('SELECT * FROM `keys` where token = ?',[api_key], function (error, results, fields) {
             if (error) throw error;
 
-            let key = results[0].key;
+            var key = results[0].key;
 
             if(key === null) {
                 Logger.error('----API Key DB Error----');
@@ -98,11 +97,11 @@ exports.extender = {
 };
 
 function outgoingResponse(message, api_key, key, api_name) {
-    let salt = generateSalt(),
+    var salt = generateSalt(),
         type = '';
 
-    let jsonString = JSON.stringify(message);
-    let api = null;
+    var jsonString = JSON.stringify(message);
+    var api = null;
 
     if (message.channel === msgHandshake || message.channel === msgConnect) {
         return message;
@@ -127,11 +126,11 @@ function outgoingResponse(message, api_key, key, api_name) {
 }
 
 function createSignature(salt, json, key) {
-    let utf8Json = utf8.encode(json),
+    var utf8Json = utf8.encode(json),
         utf8Key = utf8.encode(key),
         utf8Salt = utf8.encode(salt);
 
-    let encodedJson = sha256(utf8Json),
+    var encodedJson = sha256(utf8Json),
         encodedJsonPlusKey = sha256(encodedJson + utf8Key),
         encodedJsonPlusKeyPlusSalt = sha256(encodedJsonPlusKey + utf8Salt);
 
@@ -139,10 +138,10 @@ function createSignature(salt, json, key) {
 }
 
 function generateSalt() {
-    let charString = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    var charString = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
         salt = '';
 
-    for(let i = 0; i < 16; i++) {
+    for(var i = 0; i < 16; i++) {
         salt += charString[Math.floor(Math.random() * charString.length)];
     }
     return salt;
@@ -150,7 +149,7 @@ function generateSalt() {
 }
 
 function convertToBase64(string) {
-    let output = '';
+    var output = '';
     output = new Buffer(string).toString('base64');
 
     return output;
