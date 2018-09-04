@@ -5,7 +5,6 @@ const time_lapse = .5 * 60 * 1000;
 
 function typeSetOptions(options) {
     let output = {};
-    console.log(options);
     for(let index in options) {
         switch(index) {
             case 'siteID':
@@ -24,7 +23,16 @@ function typeSetOptions(options) {
                 output[index] = (options[index] === "true");
                 break;
             default:
-                let re = /([a-zA-Z0-9_]+)\[[0-9]+\]\[([a-zA-Z0-9_]+)\]/,
+                console.log(options[index]);
+                let regex = /[\[\{]/,
+                    found = options[index].match(regex);
+                if(found === null) {
+                    output[index] = options[index];
+                }
+                else {
+                    output[index] = JSON.parse(options[index]);
+                }
+                /*let re = /([a-zA-Z0-9_]+)\[[a-zA-Z0-9]+\]\[([a-zA-Z0-9_]+)\]/,
                     matches = index.match(re);
 
                 if(matches !== null) {
@@ -36,8 +44,8 @@ function typeSetOptions(options) {
                     });
                 }
                 else {
-                    output[index] = options[index];
-                }
+                    output[index] = JSON.parse(options[index]);
+                }*/
                 break;
         }
     }
@@ -131,6 +139,10 @@ function VrResponse() {
             version = this.extender.get_version(),
             api_key = this.extender.get_api_key();
 
+        if(location === undefined && api === 'crm_orders') {
+            location = 'crmChannel';
+        }
+
         let json = this.getRequest(message, options, api_key),
             channel = '/' + api + '/' + group + '/' + location,
             messageID = json[version].messageID;
@@ -184,6 +196,8 @@ let vr = {
             uri = '/' + version + '/' + message,
             options = typeSetOptions(req.body);
 
+        console.log('body', req.body);
+
         // notify logger of receipt
         logger.info('---- HTTP Request Received: '+ uri + ' at '+ store_number +' ----');
 
@@ -204,6 +218,8 @@ let vr = {
 
                 let version = vr.extender.get_version(),
                     messageID = message.data[version].messageID;
+
+                console.log(message);
 
                 if (message.data[version].successful) {
                     //logger.info('---- Successful ----');
