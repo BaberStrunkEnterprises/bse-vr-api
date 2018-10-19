@@ -6,6 +6,12 @@ const time_lapse = .5 * 60 * 1000;
 function typeSetOptions(options) {
     let output = {};
     for(let index in options) {
+
+        if(options[index] === '') {
+            return typeSetOptions(JSON.parse(index));
+        }
+
+        console.log(index);
         switch(index) {
             case 'siteID':
             case 'transactionType':
@@ -22,10 +28,42 @@ function typeSetOptions(options) {
             case 'includeNew':
                 output[index] = (options[index] === "true");
                 break;
+            case 'person':
+            case 'cardInfo':
+                // json object
+                output[index] = {};
+                for(let i in options[index]) {
+                    output[index][i] = options[index][i];
+                }
+                break;
+            case 'items':
+                // array of objects
+                    console.log(options[index]);
+                    for(let i = 0; i < options[index].length; i++) {
+                        for(let j in options[index][i]) {
+                            output[index] = [];
+                            let temp = {};
+                            switch(j) {
+                                case 'term':
+                                case 'dailyRate':
+                                case 'weeklyRate':
+                                case 'semiRate':
+                                case 'monthlyRate':
+                                case 'price':
+                                    temp[j] = parseFloat(options[index][i][j]);
+                                    break;
+                                default:
+                                    temp[j] = options[index][i][j];
+                                    break;
+                            }
+                            output[index].push(temp);
+                        }
+                    }
+                break;
             default:
-                console.log(options[index]);
                 let regex = /[\[\{]/,
                     found = options[index].match(regex);
+
                 if(found === null) {
                     output[index] = options[index];
                 }
@@ -49,7 +87,6 @@ function typeSetOptions(options) {
                 break;
         }
     }
-    console.log(output);
     return output;
 }
 
@@ -195,8 +232,6 @@ let vr = {
             store_number = req.headers['x-store-number'],
             uri = '/' + version + '/' + message,
             options = typeSetOptions(req.body);
-
-        console.log('body', req.body);
 
         // notify logger of receipt
         logger.info('---- HTTP Request Received: '+ uri + ' at '+ store_number +' ----');
