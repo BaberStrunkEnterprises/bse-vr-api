@@ -31,9 +31,10 @@ function typeSetOptions(options) {
             case 'person':
             case 'cardInfo':
                 // json object
+                let temp = JSON.parse(options[index]);
                 output[index] = {};
-                for(let i in options[index]) {
-                    output[index][i] = options[index][i];
+                for(let i in temp) {
+                    output[index][i] = temp[i];
                 }
                 break;
             case 'items':
