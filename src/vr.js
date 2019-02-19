@@ -4,6 +4,7 @@ let logger = require('./logger').logger;
 const time_lapse = .5 * 60 * 1000;
 
 function typeSetOptions(options) {
+    console.log('options',options);
     let output = {};
     for(let index in options) {
 
@@ -11,7 +12,6 @@ function typeSetOptions(options) {
             return typeSetOptions(JSON.parse(index));
         }
 
-        console.log(index);
         switch(index) {
             case 'siteID':
             case 'transactionType':
@@ -28,7 +28,7 @@ function typeSetOptions(options) {
             case 'includeNew':
                 output[index] = (options[index] === "true");
                 break;
-            case 'person':
+            /*case 'person':
             case 'cardInfo':
                 // json object
                 let temp = JSON.parse(options[index]);
@@ -60,7 +60,7 @@ function typeSetOptions(options) {
                             output[index].push(temp);
                         }
                     }
-                break;
+                break;*/
             default:
                 let regex = /[\[\{]/,
                     found = options[index].match(regex);
